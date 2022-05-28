@@ -1,0 +1,6 @@
+{
+  "files.associations": {
+    "*.js": "javascriptreact",
+    "walking_on_bands": "cpp"
+  }
+}
