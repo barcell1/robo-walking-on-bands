@@ -1,0 +1,151 @@
+#include <Trade\Trade.mqh>
+CTrade trade;
+
+MqlRates rates[];
+input int LOTE=100;
+input bool   Kelly_ON =false;
+input double Kelly     = 0.5;
+input double Perda_Maxima  = 0.2;
+input int Periodo_Banda=20;
+input int Desvio_Banda=2;
+int BB_Handle;
+double BB_Buff_Upper[];
+double BB_Buff_Lower[];
+double ask;
+double bid;
+
+MqlDateTime HorarioInicial;
+MqlDateTime HorarioAgora;
+
+datetime start;
+datetime HA;
+datetime diacompra;
+datetime diarastreio;
+
+int OnInit()
+  {
+
+   BB_Handle= iBands(_Symbol,PERIOD_CURRENT,Periodo_Banda,0,Desvio_Banda,PRICE_CLOSE);
+
+ ArraySetAsSeries(BB_Buff_Upper,true);
+ ArraySetAsSeries(BB_Buff_Lower,true);
+ ArraySetAsSeries(rates,true);
+   return(INIT_SUCCEEDED);
+  }
+
+void OnTick()
+  {
+CopyBuffer(BB_Handle,1,0,3,BB_Buff_Upper);  
+CopyBuffer(BB_Handle,2,0,3,BB_Buff_Lower);
+CopyRates(_Symbol,PERIOD_CURRENT,0,3,rates);
+
+if (isNewBar()==true)
+ {
+  start=TimeLocal(); 
+ }
+
+ask=NormalizeDouble(SymbolInfoDouble(_Symbol,SYMBOL_ASK),_Digits);
+bid=NormalizeDouble(SymbolInfoDouble(_Symbol,SYMBOL_BID),_Digits);
+
+TimeToStruct(start,HorarioInicial);
+
+HA=TimeLocal();
+TimeToStruct(HA,HorarioAgora);
+
+if(PositionsTotal()<=0 ){
+  if(
+       //     (HorarioAgora.hour- HorarioInicial.hour ==6 )&&
+       //     (HorarioAgora.min>=50)  &&
+         //   (ask>=BB_Buff_Upper[0]) 
+         (rates[1].close>=BB_Buff_Upper[1])
+    )
+ {
+ 
+  trade.Buy(CalcLots(),NULL,0.0,0.0,0.0);
+  diacompra= HorarioAgora.day;
+ 
+ }
+}
+
+diarastreio=HorarioAgora.day;
+
+if (diarastreio!= diacompra){
+if(PositionsTotal()<=1 ){
+Rastreia();
+}
+}   
+}
+//+------------------------------------------------------------------+
+
+bool isNewBar()
+   {
+   
+    static datetime prevTime = 0;
+    
+    datetime lastTime[1];
+   
+    if(CopyTime(Symbol(), Period(), 0, 1, lastTime) == 1 && prevTime != lastTime[0])
+       {
+       
+       
+        prevTime = lastTime[0];
+        return(true);
+       }
+    return(false);
+   }
+   
+ 
+  void Rastreia()
+   {
+   for (int i=PositionsTotal()-1;i>=0;i--) 
+   {
+     string symbol=PositionGetSymbol(i);
+     if (symbol==Symbol())
+   {
+      ulong ticket= PositionGetInteger(POSITION_TICKET);
+   
+      if (PositionGetInteger(POSITION_TYPE)== POSITION_TYPE_BUY)
+   {
+          
+      if (
+        //   (HorarioAgora.hour- HorarioInicial.hour ==6 )&&
+        //    (HorarioAgora.min>=50)  &&
+         //   (bid<=BB_Buff_Lower[0])
+            (rates[1].close<=BB_Buff_Lower[1])
+         )     
+   {
+      trade.PositionClose(ticket,0);
+      
+   }
+   } 
+   }       
+   }
+   }
+   
+   
+  int CalcLots()
+  {
+   if  (Kelly_ON ==false){
+   
+   return LOTE;
+
+   }
+   
+    double balance = AccountInfoDouble(ACCOUNT_EQUITY);  
+    double CapitalKelly;
+    double QTD_asset;
+      
+    CapitalKelly= (Kelly*balance)/Perda_Maxima;
+    QTD_asset= CapitalKelly/ask; 
+    Print("QTD_asset ", QTD_asset);
+    
+    int lot_arrendondado = MathRound(QTD_asset/100) * 100;
+    
+    if (lot_arrendondado>99700)
+    {
+    return 99700;
+    }
+    
+    return lot_arrendondado;
+  }
+   
